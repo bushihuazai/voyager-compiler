@@ -1,0 +1,244 @@
+@startuml quantization-framework
+!theme plain
+skinparam backgroundColor #FFFFFF
+
+title Voyager Compiler - Quantization Framework
+
+' Class diagram for quantization
+abstract class QuantizationSpec {
+  +dtype: str
+  +qscheme: QScheme
+  +observer_or_fake_quant_ctr: Callable
+  +ch_axis: Optional[int]
+  +is_dynamic: bool
+  +scale_dtype: Optional[torch.dtype]
+  +zero_point_dtype: Optional[torch.dtype]
+  +quant_min: Optional[int]
+  +quant_max: Optional[int]
+  --
+  +__post_init__(): void
+}
+
+class DerivedQuantizationSpec {
+  +derive_qparams_fn: Callable
+  +dtype: str
+  +qscheme: QScheme
+  --
+  Derives params from other specs
+}
+
+class QConfig {
+  +activation: Optional[QuantizationSpec]
+  +weight: Optional[QuantizationSpec]
+  +bias: Optional[QuantizationSpec]
+  --
+  Configuration for a layer
+}
+
+class QuantizationConfig {
+  +input_activation: Optional[QuantizationSpec]
+  +output_activation: Optional[QuantizationSpec]
+  +weight: Optional[QuantizationSpec]
+  +bias: Optional[QuantizationSpec]
+  +is_qat: bool
+  --
+  Extended configuration
+}
+
+enum QScheme {
+  PER_TENSOR_SYMMETRIC
+  PER_CHANNEL_SYMMETRIC
+  MICROSCALING
+  GROUP_WISE_AFFINE
+  --
+  Quantization schemes
+}
+
+abstract class ObserverOrFakeQuantize {
+  +dtype: torch.dtype
+  +qscheme: QScheme
+  --
+  +forward(x: Tensor): Tensor
+  +calculate_qparams(): Tuple
+}
+
+class Observer {
+  +min_val: Tensor
+  +max_val: Tensor
+  +dtype: torch.dtype
+  +qscheme: QScheme
+  --
+  +forward(x: Tensor): Tensor
+  +calculate_qparams(): Tuple[Tensor, Tensor]
+  +reset_min_max_vals(): void
+}
+
+class FakeQuantize {
+  +fake_quant_enabled: Tensor
+  +observer_enabled: Tensor
+  +observer: Observer
+  +quant_min: int
+  +quant_max: int
+  +dtype: torch.dtype
+  +qscheme: QScheme
+  --
+  +forward(x: Tensor): Tensor
+  +calculate_qparams(): Tuple[Tensor, Tensor]
+  +enable_observer(enabled: bool): void
+  +enable_fake_quant(enabled: bool): void
+}
+
+class FusedAmaxObsFakeQuantize {
+  +observer: Observer
+  +amax_reduce_dim: Optional[List[int]]
+  +amax_keepdim: bool
+  --
+  +forward(x: Tensor): Tuple[Tensor, Tensor]
+  Outputs both quantized value and amax
+}
+
+class XNNPACKQuantizer {
+  +global_config: Optional[QuantizationConfig]
+  +operator_type_config: Dict
+  --
+  +annotate(model: GraphModule): GraphModule
+  +validate(model: GraphModule): void
+  +set_global(config: QuantizationConfig): Self
+  +set_module_type(type, config): Self
+}
+
+' Relationships
+QuantizationSpec <|-- DerivedQuantizationSpec
+QuantizationSpec --> QScheme : uses
+QuantizationConfig --> QuantizationSpec : contains
+QConfig --> QuantizationSpec : contains
+
+ObserverOrFakeQuantize <|-- Observer
+ObserverOrFakeQuantize <|-- FakeQuantize
+ObserverOrFakeQuantize --> QScheme : uses
+FakeQuantize *-- Observer : contains
+FakeQuantize <|-- FusedAmaxObsFakeQuantize
+
+XNNPACKQuantizer --> QuantizationConfig : uses
+XNNPACKQuantizer ..> QConfig : creates
+
+' Quantization workflow
+package "Quantization Workflow" {
+  usecase "1. Configure\nQuantization" as UC1
+  usecase "2. Annotate\nModel Graph" as UC2
+  usecase "3. Insert\nObservers/FQ" as UC3
+  usecase "4. Calibration\n/Training" as UC4
+  usecase "5. Calculate\nQParams" as UC5
+  usecase "6. Convert to\nQuantized Ops" as UC6
+}
+
+actor User
+User --> UC1
+UC1 --> UC2
+UC2 --> UC3
+UC3 --> UC4
+UC4 --> UC5
+UC5 --> UC6
+
+' Data type support
+package "Supported Data Types" {
+  component "Integer Types" as int_types {
+    [INT4]
+    [INT8]
+    [INT16]
+    [INT24]
+  }
+  
+  component "Floating Point" as fp_types {
+    [FP8 E4M3]
+    [FP8 E5M2]
+    [BF16]
+    [FP16]
+  }
+  
+  component "Custom Types" as custom_types {
+    [Posit]
+    [NormalFloat]
+    [Microscaling (MX)]
+  }
+}
+
+QuantizationSpec ..> int_types : supports
+QuantizationSpec ..> fp_types : supports
+QuantizationSpec ..> custom_types : supports
+
+' Implementation files
+note top of Observer
+  **Files:**
+  • fake_quantize.py
+  • histogram.py
+end note
+
+note top of FakeQuantize
+  **Files:**
+  • fake_quantize.py
+  • decomposed.py
+end note
+
+note top of XNNPACKQuantizer
+  **Files:**
+  • quantizer/xnnpack_quantizer.py
+  • quantizer/xnnpack_quantizer_utils.py
+end note
+
+note top of int_types
+  **File:**
+  fake_quantize.py
+end note
+
+note top of fp_types
+  **File:**
+  fp8.py
+end note
+
+note top of custom_types
+  **Files:**
+  • posit.py
+  • normal_float.py
+  • mx_utils.py
+end note
+
+' Example usage
+note bottom of XNNPACKQuantizer
+  **Example Usage:**
+  
+  quantizer = XNNPACKQuantizer()
+  quantizer.set_global(
+    QuantizationConfig(
+      activation=QuantizationSpec(
+        dtype="int8",
+        qscheme=QScheme.PER_TENSOR_SYMMETRIC
+      ),
+      weight=QuantizationSpec(
+        dtype="int8",
+        qscheme=QScheme.PER_CHANNEL_SYMMETRIC
+      )
+    )
+  )
+  
+  prepared = prepare_pt2e(model, quantizer)
+  # ... calibration ...
+  quantized = convert_pt2e(prepared)
+end note
+
+legend right
+  |= Component |= Description |
+  | QuantizationSpec | Defines quantization parameters |
+  | QConfig | Layer-specific config |
+  | Observer | Collects activation statistics |
+  | FakeQuantize | Simulates quantization |
+  | XNNPACKQuantizer | Orchestrates quantization |
+  
+  **Quantization Schemes:**
+  • Per-tensor: single scale/zp for entire tensor
+  • Per-channel: separate scale/zp per channel
+  • Microscaling: block-based quantization
+  • Group-wise: quantize in groups
+endlegend
+
+@enduml

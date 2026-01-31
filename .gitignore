@@ -15,3 +15,8 @@ test
 !test/test_codgen.py
 wandb
 .vscode
+
+# Generated diagram files (keep .puml source files)
+figures/*.svg
+figures/*.png
+figures/*.pdf

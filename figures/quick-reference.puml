@@ -1,0 +1,158 @@
+@startuml voyager-compiler-quick-reference
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 12
+skinparam packageStyle rectangle
+
+title Voyager Compiler Quick Reference
+
+' Main compilation flow
+package "Compilation Pipeline" <<Frame>> {
+  
+  rectangle "1. Frontend" #E3F2FD {
+    card "PyTorch Model" as model
+    card "PT2E Export" as export
+    card "Quantization\n(INT8/FP8/Posit/NF)" as quant
+  }
+  
+  rectangle "2. IR & Optimization" #E8F5E9 {
+    card "FX Graph IR" as ir
+    card "Shape Propagation" as shape
+    card "Operator Lowering\n• MultiHeadAttention\n• Expand/Cat/Stack\n• Quant/Dequant fusion" as lowering
+  }
+  
+  rectangle "3. Hardware Passes" #FFF3E0 {
+    card "Padding\n(SIMD alignment)" as padding
+    card "Tiling\n(L2 cache opt)" as tiling
+    card "Layout Transform\n(Conv/Linear)" as layout
+    card "Operator Fusion\n(reduce mem access)" as fusion
+  }
+  
+  rectangle "4. Backend" #FCE4EC {
+    card "Memory Allocation\n• Bank conflict avoid\n• Lifetime analysis" as memory
+    card "Protobuf IR Gen" as codegen
+    card "Instruction Bitstream" as output
+  }
+}
+
+model -> export
+export -> quant
+quant -> ir
+ir -> shape
+shape -> lowering
+lowering -> padding
+padding -> tiling
+tiling -> layout
+layout -> fusion
+fusion -> memory
+memory -> codegen
+codegen -> output
+
+' Key components
+package "Core Components" <<Database>> {
+  
+  component "Quantization\nSystem" as qsys {
+    [QuantizationSpec]
+    [Observer]
+    [FakeQuantize]
+    [XNNPACKQuantizer]
+  }
+  
+  component "Code\nGeneration" as cgen {
+    [mapping.py]
+    [memory.py]
+    [param.proto]
+  }
+  
+  component "Optimization\nPasses" as passes {
+    [lowering.py]
+    [tiling.py]
+    [padding.py]
+    [data_layout.py]
+  }
+  
+  component "Data Type\nSupport" as dtypes {
+    [INT4/INT8]
+    [FP8]
+    [Posit]
+    [NormalFloat]
+    [Microscaling]
+  }
+}
+
+quant ..> qsys : uses
+lowering ..> passes : uses
+codegen ..> cgen : uses
+quant ..> dtypes : supports
+
+' Example applications
+package "Examples" <<Cloud>> {
+  collections "Image\nClassification" as img {
+    (ResNet)
+    (MobileNet)
+    (EfficientNet)
+    (ViT)
+  }
+  
+  collections "Language\nModeling" as lang {
+    (GPT-2)
+    (LLaMA)
+    (BERT)
+  }
+  
+  collections "Other\nApplications" as other {
+    (Audio Cls)
+    (QA)
+    (Segmentation)
+  }
+}
+
+' Key files reference
+note top of qsys
+  **Files:**
+  • quantize_pt2e.py
+  • fake_quantize.py
+  • qconfig.py
+  • quantizer/
+end note
+
+note top of cgen
+  **Files:**
+  • codegen/mapping.py
+  • codegen/memory.py
+  • codegen/param.proto
+end note
+
+note top of passes
+  **Files:**
+  • passes/lowering.py
+  • passes/tiling.py
+  • passes/padding.py
+  • passes/data_layout.py
+end note
+
+' API quick reference
+note bottom of output
+  **Quick API:**
+  
+  1. Export: export_model(model, inputs)
+  2. Prepare: prepare_pt2e(model, quantizer)
+  3. Transform: transform(model, args, ...)
+  4. Compile: compile(model, args, ...)
+end note
+
+legend right
+  |= Symbol |= Meaning |
+  | Rectangle | Pipeline Stage |
+  | Component | Code Module |
+  | Card | Process/Feature |
+  | Collections | Application Domain |
+  
+  **Key Parameters:**
+  • unroll_dims: (16, 16) - SIMD dimensions
+  • cache_size: 65536 - L2 cache bytes
+  • num_banks: 8 - Memory banks
+  • bank_width: 128 - Bank width bits
+endlegend
+
+@enduml
