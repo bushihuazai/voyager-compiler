@@ -6,9 +6,18 @@ The compiler ingests PyTorch models, extracts a static compute graph using [PyTo
 
 After quantization, the compiler lowers models through hardware-aware operator fusion, architecture-specific optimizations, scheduling, and accelerator instruction generation. Voyager produces a hardware-oriented intermediate representation (IR) built on the PyTorch FX graph, which is serialized via [Protocol Buffers](https://github.com/protocolbuffers/protobuf) and consumed by a C-based backend to generate the final accelerator instruction bitstream.
 
+## Documentation
+
+For a comprehensive guide to the project's design philosophy, architecture, and examples:
+
+- **[Architecture Guide (English)](ARCHITECTURE.md)** - Detailed technical documentation with PlantUML diagrams
+- **[架构指南（中文）](ARCHITECTURE_CN.md)** - 完整的中文技术文档和架构图
+
 ## Getting Started
 
 End-to-end examples of using the Voyager Compiler can be found in test/test_codegen.py, which demonstrates model ingestion, quantization, compilation, and instruction generation.
+
+See the [Architecture Guide](ARCHITECTURE.md) for detailed tutorials and examples.
 
 ## Verified Models
 
