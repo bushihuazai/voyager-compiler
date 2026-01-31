@@ -2,6 +2,8 @@
 
 This directory contains PlantUML diagrams that illustrate the architecture and design of the Voyager Compiler.
 
+> **Note**: The diagrams use modern PlantUML features. If you see syntax errors when generating locally with older PlantUML versions (< 2021), the diagrams will still render correctly when viewed online at https://www.plantuml.com/plantuml/uml/ or with newer PlantUML versions.
+
 ## Available Diagrams
 
 ### 1. Quick Reference (`quick-reference.puml`)
