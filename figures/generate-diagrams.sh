@@ -3,7 +3,7 @@
 # Generate PlantUML diagrams for Voyager Compiler documentation
 # This script converts all .puml files to SVG and PNG formats
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
