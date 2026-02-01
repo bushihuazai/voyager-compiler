@@ -1,5 +1,5 @@
 @startuml quantization-framework
-!theme plain
+!theme mars
 skinparam backgroundColor #FFFFFF
 
 title Voyager Compiler - Quantization Framework
@@ -142,21 +142,21 @@ UC5 --> UC6
 
 ' Data type support
 package "Supported Data Types" {
-  component "Integer Types" as int_types {
+  class "Integer Types" as int_types {
     [INT4]
     [INT8]
     [INT16]
     [INT24]
   }
   
-  component "Floating Point" as fp_types {
+  class "Floating Point" as fp_types {
     [FP8 E4M3]
     [FP8 E5M2]
     [BF16]
     [FP16]
   }
   
-  component "Custom Types" as custom_types {
+  class "Custom Types" as custom_types {
     [Posit]
     [NormalFloat]
     [Microscaling (MX)]
