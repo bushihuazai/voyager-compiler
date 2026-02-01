@@ -87,20 +87,20 @@ quant ..> dtypes : supports
 
 ' Example applications
 package "Examples" <<Cloud>> {
-  collections "Image\nClassification" as img {
+  component "Image\nClassification" as img {
     (ResNet)
     (MobileNet)
     (EfficientNet)
     (ViT)
   }
   
-  collections "Language\nModeling" as lang {
+  component "Language\nModeling" as lang {
     (GPT-2)
     (LLaMA)
     (BERT)
   }
   
-  collections "Other\nApplications" as other {
+  component "Other\nApplications" as other {
     (Audio Cls)
     (QA)
     (Segmentation)
