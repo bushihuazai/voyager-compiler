@@ -1,0 +1,244 @@
+@startuml architecture-overview
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+
+title Voyager Compiler - System Architecture Overview
+
+' Define colors
+!define FRONTEND_COLOR #E3F2FD
+!define IR_COLOR #E8F5E9
+!define PASSES_COLOR #FFF3E0
+!define BACKEND_COLOR #FCE4EC
+!define SUPPORT_COLOR #F3E5F5
+
+' Main architecture layers
+package "Voyager Compiler Architecture" {
+  
+  ' Frontend Layer
+  package "Frontend Layer" FRONTEND_COLOR {
+    component "PyTorch Model\nIngestion" as ingestion {
+      [torch.nn.Module]
+      [torchvision.models]
+      [transformers models]
+    }
+    
+    component "PT2E Export" as export {
+      [torch.export()]
+      [FX Graph Generation]
+      [Static Shape Inference]
+    }
+    
+    component "Quantization\nFramework" as quant_fw {
+      [QuantizationSpec]
+      [QConfig]
+      [XNNPACKQuantizer]
+      [Observer/FakeQuantize]
+    }
+  }
+  
+  ' IR Layer
+  package "Intermediate Representation" IR_COLOR {
+    component "FX Graph IR" as fx_ir {
+      [torch.fx.GraphModule]
+      [Node metadata]
+      [Shape information]
+    }
+    
+    component "Shape Analysis" as shape {
+      [ShapeProp]
+      [FakeTensorMode]
+      [Type inference]
+    }
+    
+    component "Graph Manipulation" as graph_ops {
+      [Node insertion/deletion]
+      [Pattern matching]
+      [Graph traversal]
+    }
+  }
+  
+  ' Optimization Passes Layer
+  package "Optimization Passes" PASSES_COLOR {
+    component "Lowering Pass" as lowering {
+      [split_multi_head_attention]
+      [convert_expand_to_memory_copy]
+      [fuse_quantize_dequantize]
+    }
+    
+    component "Padding Pass" as padding {
+      [pad_matrix_op_dimensions]
+      [pad_vector_op_dimensions]
+      [Hardware alignment]
+    }
+    
+    component "Tiling Pass" as tiling {
+      [run_matrix_op_l2_tiling]
+      [run_vector_op_l2_tiling]
+      [Cache optimization]
+    }
+    
+    component "Layout Pass" as layout {
+      [transpose_conv2d_inputs_and_weights]
+      [transpose_linear_weights]
+      [Data reordering]
+    }
+    
+    component "Fusion Pass" as fusion {
+      [fuse_operator]
+      [Pattern-based fusion]
+      [Kernel merging]
+    }
+  }
+  
+  ' Backend Layer
+  package "Backend Layer" BACKEND_COLOR {
+    component "Memory Allocator" as allocator {
+      [MemoryAllocator]
+      [Lifetime analysis]
+      [Bank conflict resolution]
+    }
+    
+    component "Code Generator" as codegen {
+      [gen_code]
+      [Protobuf serialization]
+      [Tensor export]
+    }
+    
+    component "Protobuf IR" as proto {
+      [param.proto]
+      [Model message]
+      [Operation encoding]
+    }
+  }
+  
+  ' Support Components
+  package "Support Components" SUPPORT_COLOR {
+    component "Data Types" as dtypes {
+      [INT4/INT8]
+      [FP8 (E4M3/E5M2)]
+      [Posit]
+      [NormalFloat]
+      [Microscaling]
+    }
+    
+    component "Utilities" as utils {
+      [Operator mapping]
+      [Type checking]
+      [Debugging tools]
+    }
+    
+    component "Custom Modules" as modules {
+      [Quantizable BERT]
+      [Quantizable MobileBERT]
+      [Custom Softmax]
+    }
+  }
+}
+
+' External interfaces
+cloud "User Interface" as user {
+  component "Python API" as api {
+    interface "export_model()" as exp_api
+    interface "prepare_pt2e()" as prep_api
+    interface "transform()" as trans_api
+    interface "compile()" as comp_api
+  }
+}
+
+database "Output Artifacts" as output {
+  file "model.txt" as model_txt
+  file "layers.txt" as layers_txt
+  file "tensor_files/" as tensor_files
+  file "compute_graph.svg" as graph_svg
+  file "memory.png" as mem_png
+}
+
+rectangle "Hardware Backend" as hw {
+  component "C Backend" as c_backend
+  component "Instruction\nBitstream" as bitstream
+}
+
+' Connections between layers
+ingestion --> export : provides
+export --> quant_fw : generates
+quant_fw --> fx_ir : annotated
+
+fx_ir --> shape : propagates
+shape --> graph_ops : enables
+
+graph_ops --> lowering : input
+lowering --> padding : optimized
+padding --> tiling : aligned
+tiling --> layout : tiled
+layout --> fusion : transformed
+
+fusion --> allocator : fused graph
+allocator --> codegen : memory map
+codegen --> proto : serializes
+
+' Support connections
+quant_fw ..> dtypes : uses
+lowering ..> utils : uses
+fusion ..> modules : uses
+
+' User API connections
+user --> ingestion : PyTorch Model
+exp_api --> export
+prep_api --> quant_fw
+trans_api --> lowering
+trans_api --> fusion
+comp_api --> allocator
+comp_api --> codegen
+
+' Output connections
+codegen --> output : generates
+codegen --> hw : feeds
+
+' Hardware flow
+proto --> c_backend : consumed by
+c_backend --> bitstream : generates
+
+' Key data flows
+note right of fx_ir
+  **FX Graph Structure:**
+  • Nodes (operations)
+  • Args (inputs)
+  • Kwargs (parameters)
+  • Metadata (shape, dtype, etc.)
+end note
+
+note right of allocator
+  **Memory Management:**
+  • Total memory: configurable
+  • Bank width: hardware-specific
+  • Cache size: L2 optimization
+  • Bank conflict avoidance
+end note
+
+note right of proto
+  **Protobuf Schema:**
+  message Model {
+    repeated Tensor inputs;
+    repeated Tensor parameters;
+    repeated Operation ops;
+  }
+end note
+
+legend bottom
+  |= Color |= Layer |
+  | FRONTEND_COLOR | Frontend Processing |
+  | IR_COLOR | Intermediate Representation |
+  | PASSES_COLOR | Optimization Passes |
+  | BACKEND_COLOR | Backend Generation |
+  | SUPPORT_COLOR | Support Components |
+  
+  **Key Files:**
+  • src/voyager_compiler/__init__.py - Main API
+  • src/voyager_compiler/quantize_pt2e.py - Quantization
+  • src/voyager_compiler/codegen/ - Code generation
+  • src/voyager_compiler/codegen/passes/ - Optimization passes
+endlegend
+
+@enduml

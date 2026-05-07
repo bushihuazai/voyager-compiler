@@ -1,0 +1,214 @@
+@startuml compilation-pipeline
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam activityBackgroundColor #E8F5E9
+skinparam activityBorderColor #4CAF50
+skinparam activityStartColor #2E7D32
+skinparam activityEndColor #C62828
+
+title Voyager Compiler - Detailed Compilation Pipeline
+
+start
+
+:Load PyTorch Model;
+note right
+  Supported Models:
+  • CNNs (ResNet, MobileNet)
+  • Transformers (BERT, ViT)
+  • LLMs (GPT-2, LLaMA)
+end note
+
+partition "**Stage 1: Frontend Processing**" {
+  :PyTorch 2 Export (PT2E);
+  note right
+    Extract static compute graph
+    Generate FX Graph
+    API: export_model(model, inputs)
+  end note
+  
+  :Quantization Configuration;
+  note right
+    Configure QuantizationSpec:
+    • dtype (int8, fp8, posit, nf)
+    • qscheme (per_tensor/channel)
+    • observer settings
+  end note
+  
+  :Insert Observer/FakeQuantize;
+  note right
+    API: prepare_pt2e(model, quantizer)
+  end note
+  
+  :Calibration/Training;
+  note right
+    Collect activation statistics
+    or perform QAT
+  end note
+  
+  :Convert to Quantized Model;
+  note right
+    Replace FakeQuantize with
+    quantized operations
+    API: convert_pt2e(prepared)
+  end note
+}
+
+partition "**Stage 2: Shape & IR Processing**" {
+  :Shape Propagation;
+  note right
+    Infer shapes of all tensors
+    using ShapeProp class
+  end note
+  
+  :Operator Decomposition;
+  note left
+    **Lowering operations:**
+    • split_multi_head_attention()
+    • convert_expand_to_memory_copy()
+    • convert_cat_and_stack_as_stack_on_dim0()
+    • fuse_quantize_dequantize_with_previous_op()
+  end note
+}
+
+partition "**Stage 3: Hardware Alignment**" {
+  if (Padding enabled?) then (yes)
+    :Pad Matrix Operations;
+    note right
+      pad_matrix_op_dimensions()
+      Align to unroll_dims
+    end note
+    
+    :Pad Vector Operations;
+    note right
+      pad_vector_op_dimensions()
+      Align to hardware width
+    end note
+  else (no)
+    :Skip padding;
+  endif
+}
+
+partition "**Stage 4: Tiling Optimization**" {
+  if (Cache configured?) then (yes)
+    :Matrix Operation L2 Tiling;
+    note right
+      run_matrix_op_l2_tiling()
+      Split for cache efficiency
+      Consider: cache_size, num_banks
+    end note
+    
+    :Vector Operation L2 Tiling;
+    note right
+      run_vector_op_l2_tiling()
+      Optimize for cache locality
+    end note
+  else (no)
+    :Skip tiling;
+  endif
+}
+
+partition "**Stage 5: Layout Transformation**" {
+  :Transform Convolution Layout;
+  note right
+    transpose_conv2d_inputs_and_weights()
+    Prepare for systolic array
+  end note
+  
+  :Transform Linear Layout;
+  note right
+    transpose_linear_weights()
+    Optimize for GEMM hardware
+  end note
+  
+  :Eliminate Redundant Reshapes;
+  note right
+    eliminate_reshape_with_no_effect()
+  end note
+}
+
+partition "**Stage 6: Operator Fusion**" {
+  :Apply Fusion Patterns;
+  note right
+    **Example patterns:**
+    Conv → Dequant → ReLU → Quant
+    GEMM → Dequant → GELU → Quant
+    
+    Reduces memory access overhead
+    API: fuse(model, patterns, ...)
+  end note
+  
+  :Rename & Deduplicate Nodes;
+}
+
+partition "**Stage 7: Memory Allocation**" {
+  :Analyze Tensor Lifetimes;
+  note right
+    MemoryAllocator tracks:
+    • When tensors are created
+    • When tensors are last used
+  end note
+  
+  :Allocate Memory Addresses;
+  note right
+    Considerations:
+    • Total memory budget
+    • Bank width
+    • Number of banks
+  end note
+  
+  :Avoid Bank Conflicts;
+  note right
+    Ensure concurrent accesses
+    don't hit same bank
+  end note
+  
+  if (dump_snapshot?) then (yes)
+    :Generate Memory Snapshot;
+    note right: Save memory.png visualization
+  endif
+}
+
+partition "**Stage 8: Code Generation**" {
+  :Generate Protobuf IR;
+  note right
+    Convert FX Graph to param.proto:
+    • Model.inputs
+    • Model.parameters
+    • Model.ops (Operation list)
+  end note
+  
+  if (dump_tensors?) then (yes)
+    :Export Tensor Files;
+    note right: Save tensor data to files
+  endif
+  
+  :Generate Layer List;
+  note right: Save layers.txt with op names
+  
+  :Generate Model Text;
+  note right: Save model.txt (human-readable)
+  
+  if (Small model?) then (yes)
+    :Generate Compute Graph SVG;
+    note right: Visualize with graphviz
+  endif
+}
+
+:Output Instruction Bitstream;
+note right
+  Final output consumed by
+  C-based backend for hardware
+end note
+
+stop
+
+legend right
+  |= Key Files |
+  | **quantize_pt2e.py** | Quantization |
+  | **__init__.py** | transform(), compile() |
+  | **codegen/passes/** | Optimization passes |
+  | **codegen/mapping.py** | IR generation |
+  | **codegen/memory.py** | Memory allocation |
+endlegend
+
+@enduml
